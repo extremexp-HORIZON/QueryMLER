@@ -1,0 +1,41 @@
+workflow DataIntegrationPipeline {
+
+    START -> Task1 -> Task2 -> Task3 -> Task4 -> END;
+
+    task Task1 {
+        implementation "LoadDatasetTask";
+    }
+
+    task Task2 {
+        implementation "FineTuneLLMTask";
+    }
+
+    task Task3 {
+        implementation "DataIntegrationTask";
+    }
+
+    task Task4 {
+        implementation "CollectResultsTask";
+    }
+
+    define input data PublicationsDataset;
+    configure data PublicationsDataset {
+        path "publications.csv";
+    }
+
+    define input data GroundTruthDataset;
+    configure data GroundTruthDataset {
+        path "ground_truth_publications.csv";
+    }
+
+    define output data PipelineResults;
+    configure data PipelineResults {
+        path "output/pipeline_results.json";
+    }
+
+    PublicationsDataset --> Task1.PublicationsInput;
+    GroundTruthDataset --> Task1.GroundTruthInput;
+    Task2.TrainingResults --> Task3.TrainingResults;
+    Task3.InferenceResults --> Task4.InferenceResults;
+    Task4.FinalResults --> PipelineResults;
+}

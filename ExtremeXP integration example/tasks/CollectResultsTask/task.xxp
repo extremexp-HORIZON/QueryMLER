@@ -1,0 +1,20 @@
+task CollectResultsTask {
+
+    define input data InferenceResults;
+
+    define metric pipeline_status {
+        kind single-value;
+        type String;
+    }
+
+
+    define metric pipeline_completion_time {
+        kind single-value;
+        type String;
+    }
+
+    define output data FinalResults;
+
+    implementation "CollectResultsTask/task.py";
+    python_version "3.9";
+}

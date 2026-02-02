@@ -1,0 +1,13 @@
+task FineTuneLLMTask {
+
+    define metric training_status {
+        kind single-value;
+        type String;
+    }
+
+    define output data TrainingResults;
+
+    implementation "FineTuneLLMTask/task.py";
+    python_version "3.9";
+    venv "FineTuneLLMTask/requirements.txt";
+}

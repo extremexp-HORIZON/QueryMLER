@@ -1,0 +1,14 @@
+task LoadDatasetTask {
+
+    define input data PublicationsInput;
+    define input data GroundTruthInput;
+
+    define metric upload_status {
+        kind single-value;
+        type String;
+    }
+
+    implementation "LoadDatasetTask/task.py";
+    python_version "3.9";
+    venv "LoadDatasetTask/requirements.txt";
+}

@@ -1,0 +1,20 @@
+task DataIntegrationTask {
+
+    define input data TrainingResults;
+
+    define metric inference_status {
+        kind single-value;
+        type String;
+    }
+
+    define metric duplicate_pairs_found {
+        kind single-value;
+        type Integer;
+    }
+
+    define output data InferenceResults;
+
+    implementation "DataIntegrationTask/task.py";
+    python_version "3.9";
+    venv "DataIntegrationTask/requirements.txt";
+}
