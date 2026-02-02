@@ -1,0 +1,51 @@
+# Build artifacts
+target/
+**/test-classes/
+**/generated-sources/
+*.iml
+
+# VCS
+.git/
+.gitignore
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Data & large artifacts (adjust as needed)
+*.csv
+*.tsv
+*.parquet
+*.zip
+*.gz
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+
+# Maven local repo (not copied if we separate stages anyway)
+.m2/
+
+# Logs
+*.log
+
+# Not needed in image for runtime
+README.md
+LICENSE
+exp.txttarget/
+*.log
+*.csv
+*.parquet
+*.zip
+*.tar
+*.gz
+*.pkl
+*.pt
+*.h5
+*.onnx
+__pycache__/
+*.pyc
+*.ipynb
+.git/
+.cache/

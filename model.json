@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "defaultSchema": "oag",
+  "schemas": [
+    {
+      "name": "oag",
+      "type": "custom",
+      "factory": "org.imsi.queryEREngine.imsi.calcite.adapter.enumerable.csv.CsvSchemaFactory",
+      "operand": {
+        "directory": "/data",
+        "flavor": "translatable"
+      }
+    }
+  ]
+}

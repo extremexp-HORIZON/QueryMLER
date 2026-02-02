@@ -1,0 +1,681 @@
+openapi: 3.0.3
+info:
+  title: QueryMLER - Entity Resolution API
+  version: "2.0"
+  description: An API for QueryMLER's model training and inference methods for fast, analysis-aware deduplication over dirty data. Supports both supervised (model-based) and unsupervised (Jaccard similarity) inference. The project's source code is available at our [GitLab repository](https://colab-repo.intracom-telecom.com/colab-projects/extremexp/experiment-modelling/analytics-task-library/data-integration/queryer).
+
+servers:
+  - url: http://localhost:5000
+tags:
+  - name: Entity Resolution
+    description: Methods for performing Entity Resolution with QueryMLER.
+  - name: Dataset Management
+    description: Upload and manage datasets in the system.
+paths:
+  /upload-dataset:
+    post:
+      tags:
+        - Dataset Management
+      summary: Upload a CSV dataset to the system
+      description: Upload a new dataset file to the `/data` volume. Supports both JSON (inline data) and multipart file upload. Files can be marked as temporary for automatic cleanup after a specified number of hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                  description: Name of the CSV file to save (e.g., "my_dataset.csv")
+                  example: "publications.csv"
+                data:
+                  type: string
+                  description: CSV data as a string with newline characters
+                  example: "id,title,authors,venue,year\n1,Paper Title,Author Name,Conference,2023\n2,Another Paper,Another Author,Journal,2024"
+                temporary:
+                  type: boolean
+                  description: Whether the file should be automatically deleted after cleanup_hours
+                  default: true
+                cleanup_hours:
+                  type: integer
+                  description: Number of hours before the file is automatically deleted (if temporary is true)
+                  default: 12
+              required:
+                - filename
+                - data
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file to upload
+                temporary:
+                  type: boolean
+                  description: Whether the file should be automatically deleted after cleanup_hours
+                  default: true
+                cleanup_hours:
+                  type: integer
+                  description: Number of hours before the file is automatically deleted (if temporary is true)
+                  default: 12
+      responses:
+        '200':
+          description: Dataset uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Dataset uploaded successfully"
+                  filepath:
+                    type: string
+                    example: "/data/publications.csv"
+                  filename:
+                    type: string
+                    example: "publications.csv"
+                  temporary:
+                    type: boolean
+                    example: true
+                  cleanup_hours:
+                    type: integer
+                    example: 12
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: Server error during upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: string
+  /cleanup-temp-files:
+    post:
+      tags:
+        - Dataset Management
+      summary: Manually trigger cleanup of old temporary files
+      description: Removes temporary files that have exceeded their cleanup_hours threshold. This is automatically run every hour by a background thread, but can be manually triggered with this endpoint.
+      responses:
+        '200':
+          description: Cleanup completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Cleaned up 3 temporary files"
+                  cleaned_files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        filepath:
+                          type: string
+                        filename:
+                          type: string
+                        age_hours:
+                          type: number
+        '500':
+          description: Server error during cleanup
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: string
+  /train:
+    post:
+      tags:
+        - Entity Resolution
+      summary: Train a language model for comparison execution with specified parameters.
+      description: This endpoint initiates fine-tuning of a large language model based on specified parameters and data. This operation is performed on a subset of the user's dataset, specified by an SQL query, and is necessary in order to peform supervised inference.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dataset:
+                  type: string
+                  description: Path to the dataset file.
+                query:
+                  type: string
+                  description: SQL query to fetch data bucket for training.
+                ground_truth:
+                  type: string
+                  description: Path to the ground truth file.
+                ground_truth_delimiter:
+                  type: string
+                  description: Delimiter used in the ground truth CSV file.
+                  default: ";"
+                csv_delimiter:
+                  type: string
+                  description: Delimiter used in the dataset CSV file.
+                  default: ">"
+                dataset_name:
+                  type: string
+                  description: Name of the dataset.
+                train_csv:
+                  type: string
+                  description: Name of the CSV file to save the training dataset.
+                model:
+                  type: string
+                  description: Pre-trained model identifier. Defaults to `distilbert-base-uncased`.
+                  default: distilbert-base-uncased
+                epochs:
+                  type: integer
+                  description: Number of training epochs.
+                  default: 1
+                batch_size:
+                  type: integer
+                  description: Batch size for training.
+                  default: 32
+                learning_rate:
+                  type: number
+                  format: float
+                  description: Learning rate for the optimizer.
+                  default: 0.001
+                max_seq_length:
+                  type: integer
+                  description: Maximum sequence length for the tokenizer.
+                  default: 128
+                evaluation_metric:
+                  type: string
+                  description: Evaluation metric to use. Options are `accuracy`, `f1_score`, `precision`, and `recall`.
+                  default: accuracy
+                confidence_threshold:
+                  type: number
+                  format: float
+                  description: Confidence threshold for predictions.
+                  default: 0.5
+                top_k_predictions:
+                  type: integer
+                  description: Number of top predictions to consider.
+                  default: 3
+                class_weights:
+                  type: array
+                  items:
+                    type: number
+                  description: Weights for each class.
+                  default: [1.0, 1.0]
+                loss_func_type:
+                  type: string
+                  description: Loss function type, either `CrossEntropyLoss` or `BCEWithLogitsLoss`.
+                  default: CrossEntropyLoss
+                model_name:
+                  type: string
+                  description: Name of the directory to store the trained model.
+                tokenizer_name:
+                  type: string
+                  description: Name of the directory to store the tokenizer.
+      responses:
+        '200':
+          description: Training completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: Invalid input.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+  /inference:
+    post:
+      tags:
+        - Entity Resolution
+      summary: Run supervised inference using a trained model.
+      description: This endpoint performs inference using a previously fine-tuned model, returning the pairs of identified duplicate entities within the user's query.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: SQL query to fetch data for inference.
+                dataset:
+                  type: string
+                  description: Path to the dataset file for inference.
+                dataset_name:
+                  type: string
+                  description: Name of the dataset.
+                csv_delimiter:
+                  type: string
+                  description: Delimiter used in the dataset CSV file.
+                  default: ">"
+                model_name:
+                  type: string
+                  description: Directory name of the trained model to load for inference.
+                tokenizer_name:
+                  type: string
+                  description: Directory name of the saved tokenizer to load for inference.
+                batch_size:
+                  type: integer
+                  description: Batch size for inference.
+                  default: 32
+                max_seq_length:
+                  type: integer
+                  description: Maximum sequence length for tokenization.
+                  default: 128
+                confidence_threshold:
+                  type: number
+                  format: float
+                  description: Minimum confidence threshold for duplicate classification (0.0-1.0).
+                  default: 0.5
+                output_format:
+                  type: string
+                  description: Output format - 'pairs' returns duplicate pairs, 'deduplicated' returns cleaned dataset.
+                  enum: [pairs, deduplicated]
+                  default: pairs 
+      responses:
+        '200':
+          description: Inference completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  output_format:
+                    type: string
+                  total_candidate_pairs:
+                    type: integer
+                  duplicate_pairs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id1:
+                          type: string
+                        id2:
+                          type: string
+                        confidence:
+                          type: number
+                  deduplicated_data:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          description: Error during inference.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+  /inference_jaccard:
+    post:
+      tags:
+        - Entity Resolution
+      summary: Run unsupervised inference using Jaccard similarity.
+      description: This endpoint performs inference using Jaccard similarity (word overlap) without requiring a trained model. Useful for quick deduplication without training.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: SQL query to fetch data for inference.
+                dataset:
+                  type: string
+                  description: Path to the dataset file for inference.
+                dataset_name:
+                  type: string
+                  description: Name of the dataset.
+                csv_delimiter:
+                  type: string
+                  description: Delimiter used in the dataset CSV file.
+                  default: ">"
+                jaccard_threshold:
+                  type: number
+                  format: float
+                  description: Minimum Jaccard similarity threshold (0.0-1.0). Higher values require more word overlap.
+                  default: 0.5
+                output_format:
+                  type: string
+                  description: Output format - 'pairs' returns duplicate pairs, 'deduplicated' returns cleaned dataset.
+                  enum: [pairs, deduplicated]
+                  default: pairs
+      responses:
+        '200':
+          description: Jaccard inference completed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  output_format:
+                    type: string
+                  total_candidate_pairs:
+                    type: integer
+                  duplicate_pairs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id1:
+                          type: string
+                        id2:
+                          type: string
+                        confidence:
+                          type: number
+                  deduplicated_data:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          description: Error during inference.
+          content:
+            application/json:
+              schema:
+                type: string
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+  /inference_jaccard_clean_clean:
+    post:
+      tags:
+        - Entity Resolution
+      summary: Run unsupervised clean-clean inference using Jaccard similarity
+      description: This endpoint performs clean-clean deduplication (matching records across two different clean datasets) using Jaccard similarity without requiring a trained model. Useful for finding duplicates between two separate datasets.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: SQL query to fetch data for clean-clean inference (e.g., "DEDUP dataset1, dataset2")
+                  example: "DEDUP publications1, publications2"
+                dataset1_name:
+                  type: string
+                  description: Name of the first dataset
+                  example: "publications1"
+                dataset2_name:
+                  type: string
+                  description: Name of the second dataset
+                  example: "publications2"
+                csv_delimiter1:
+                  type: string
+                  description: Delimiter used in the first dataset CSV file
+                  default: ">"
+                csv_delimiter2:
+                  type: string
+                  description: Delimiter used in the second dataset CSV file
+                  default: ">"
+                jaccard_threshold:
+                  type: number
+                  format: float
+                  description: Minimum Jaccard similarity threshold (0.0-1.0). Higher values require more word overlap.
+                  default: 0.5
+                output_format:
+                  type: string
+                  description: Output format - 'pairs' returns duplicate pairs across datasets, 'deduplicated' returns merged deduplicated dataset
+                  enum: [pairs, deduplicated]
+                  default: pairs
+              required:
+                - query
+                - dataset1_name
+                - dataset2_name
+      responses:
+        '200':
+          description: Clean-clean inference completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Jaccard clean-clean inference completed. Found 150 duplicate pairs."
+                  output_format:
+                    type: string
+                    enum: [pairs, deduplicated]
+                  original_count:
+                    type: integer
+                    description: Total records from both datasets
+                  deduplicated_count:
+                    type: integer
+                    description: Number of unique records after deduplication
+                  total_candidate_pairs:
+                    type: integer
+                    description: Total candidate pairs evaluated
+                  duplicate_pairs_found:
+                    type: integer
+                    description: Number of duplicate pairs found
+                  duplicate_pairs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id1:
+                          type: string
+                        id2:
+                          type: string
+                        confidence:
+                          type: number
+                  deduplicated_data:
+                    type: array
+                    items:
+                      type: object
+                  jaccard_threshold:
+                    type: number
+        '404':
+          description: Candidates file not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+        '500':
+          description: Error during inference
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  details:
+                    type: string
+components:
+  schemas:
+    TrainRequest:
+      type: object
+      properties:
+        dataset:
+          type: string
+        query:
+          type: string
+        ground_truth:
+          type: string
+        ground_truth_delimiter:
+          type: string
+        csv_delimiter:
+          type: string
+        dataset_name:
+          type: string
+        train_csv:
+          type: string
+        model:
+          type: string
+        epochs:
+          type: integer
+        batch_size:
+          type: integer
+        learning_rate:
+          type: number
+        max_seq_length:
+          type: integer
+        evaluation_metric:
+          type: string
+        confidence_threshold:
+          type: number
+        top_k_predictions:
+          type: integer
+        class_weights:
+          type: array
+          items:
+            type: number
+        loss_func_type:
+          type: string
+        model_name:
+          type: string
+        tokenizer_name:
+          type: string
+    InferenceRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        dataset:
+          type: string
+        dataset_name:
+          type: string
+        csv_delimiter:
+          type: string
+        model_name:
+          type: string
+        tokenizer_name:
+          type: string
+        batch_size:
+          type: integer
+        max_seq_length:
+          type: integer
+        confidence_threshold:
+          type: number
+        output_format:
+          type: string
+    JaccardInferenceRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        dataset:
+          type: string
+        dataset_name:
+          type: string
+        csv_delimiter:
+          type: string
+        jaccard_threshold:
+          type: number
+        output_format:
+          type: string
+    JaccardCleanCleanRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          description: SQL query for clean-clean deduplication
+        dataset1_name:
+          type: string
+          description: Name of the first dataset
+        dataset2_name:
+          type: string
+          description: Name of the second dataset
+        csv_delimiter1:
+          type: string
+          description: Delimiter for first dataset
+        csv_delimiter2:
+          type: string
+          description: Delimiter for second dataset
+        jaccard_threshold:
+          type: number
+          description: Jaccard similarity threshold
+        output_format:
+          type: string
+          description: Output format (pairs or deduplicated)
+      required:
+        - query
+        - dataset1_name
+        - dataset2_name
+    UploadDatasetRequest:
+      type: object
+      properties:
+        filename:
+          type: string
+          description: Name of the CSV file
+        data:
+          type: string
+          description: CSV data as string
+        temporary:
+          type: boolean
+          description: Mark file as temporary
+        cleanup_hours:
+          type: integer
+          description: Hours before auto-cleanup
+      required:
+        - filename
+        - data

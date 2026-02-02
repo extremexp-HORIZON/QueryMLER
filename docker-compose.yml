@@ -1,0 +1,48 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: queryer-api
+    environment:
+      - JAVA_OPTS=-Xms512m -Xmx2048m
+    volumes:
+      - ./scripts:/data
+    ports:
+      - "8080:8080"
+    depends_on:
+      - bert
+      - llm
+    restart: unless-stopped
+
+  bert:
+    build:
+      context: .
+      dockerfile: Dockerfile.bert
+    container_name: queryer-bert
+    command: ["python", "model_api.py"]
+    working_dir: /app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./scripts:/data
+      - ./models:/app/models
+    restart: unless-stopped
+
+  llm:
+    build:
+      context: .
+      dockerfile: Dockerfile.bert
+    container_name: queryer-llm
+    command: ["python", "llm_server.py"]
+    working_dir: /app
+    volumes:
+      - ./scripts:/data
+    depends_on:
+      - bert
+    # Expose if need to interact directly
+    # ports:
+    #   - "5678:5678"
+    # volumes:
+    #   - ./bert_inference:/app
+    restart: unless-stopped

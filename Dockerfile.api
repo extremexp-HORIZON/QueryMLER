@@ -1,0 +1,18 @@
+FROM maven:3.9-eclipse-temurin-11 AS build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn -q -DskipTests dependency:go-offline
+COPY src ./src
+RUN mvn -q -DskipTests clean package
+
+FROM eclipse-temurin:11-jre
+WORKDIR /app
+ARG JAR_FILE=queryER-API-2.0.0.jar
+ENV JAVA_OPTS="-Xms512m -Xmx2048m --add-opens=java.base/java.nio=ALL-UNNAMED"
+COPY --from=build /workspace/target/${JAR_FILE} app.jar
+COPY model.json ./model.json
+COPY src/main/resources/stopwords_SER ./stopwords_SER
+RUN chown -R 1000:1000 /app
+EXPOSE 8080
+USER 1000
+ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar app.jar"]

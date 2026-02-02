@@ -1,0 +1,18 @@
+FROM python:3.10-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 \
+	PYTHONUNBUFFERED=1 \
+	TRANSFORMERS_CACHE=/app/.cache/huggingface \
+	HF_HOME=/app/.cache/huggingface
+WORKDIR /app
+
+COPY bert_inference/requirements.txt /tmp/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+	pip install -r /tmp/requirements.txt
+
+COPY bert_inference/*.py ./
+
+RUN mkdir -p /app/.cache/huggingface && chown -R 65534:65534 /app
+
+EXPOSE 5000 5678
+USER nobody
+CMD ["python","llm_server.py"]
